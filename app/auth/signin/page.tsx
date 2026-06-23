@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { loginAction } from '@/lib/actions/auth'
 
 export default function SignInPage() {
   const router = useRouter()
@@ -18,9 +18,9 @@ export default function SignInPage() {
     setError('')
     setIsLoading(true)
     try {
-      const result = await signIn('credentials', { email, password, redirect: false })
+      const result = await loginAction(email, password)
       if (result?.error) {
-        setError('Invalid email or password')
+        setError(result.error)
       } else if (result?.ok) {
         router.push('/')
         router.refresh()
@@ -32,14 +32,17 @@ export default function SignInPage() {
     }
   }
 
-  const inputClass = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#6366f1] transition-colors'
+  const inputClass =
+    'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#6366f1] transition-colors'
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
-
         <div className="text-center mb-10">
-          <Link href="/" className="text-3xl font-black tracking-tighter bg-gradient-to-r from-[#6366f1] to-[#f59e0b] bg-clip-text text-transparent">
+          <Link
+            href="/"
+            className="text-3xl font-black tracking-tighter bg-gradient-to-r from-[#6366f1] to-[#f59e0b] bg-clip-text text-transparent"
+          >
             DropDeck
           </Link>
           <h1 className="text-2xl font-bold text-foreground mt-6 mb-2">Welcome back</h1>
@@ -55,7 +58,9 @@ export default function SignInPage() {
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-2">Email</label>
+              <label htmlFor="email" className="block text-sm font-medium text-muted-foreground mb-2">
+                Email
+              </label>
               <input
                 id="email"
                 type="email"
@@ -69,7 +74,9 @@ export default function SignInPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-muted-foreground mb-2">Password</label>
+              <label htmlFor="password" className="block text-sm font-medium text-muted-foreground mb-2">
+                Password
+              </label>
               <input
                 id="password"
                 type="password"
