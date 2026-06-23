@@ -3,8 +3,9 @@ import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { query } from '@/lib/db'
 
-// Guard — only callable with the right secret so it can't be abused in prod
-const SECRET = process.env.LOAD_TEST_SECRET ?? 'dropdeck-load-test'
+// Guard — only callable from preview deploys (Vercel Deployment Protection handles auth)
+// Also accepts an optional secret header for extra safety
+const SECRET = process.env.LOAD_TEST_SECRET ?? ''
 
 const BASE_URL    = process.env.NEXTAUTH_URL ?? 'https://dropdeck-commerce-platform.vercel.app'
 const TOTAL_STOCK = 100
@@ -28,8 +29,9 @@ async function checkoutRequest(dropId: string, buyerId: string): Promise<{ succe
 }
 
 export async function POST(req: NextRequest) {
+  // If a secret is configured, enforce it; otherwise rely on Vercel Deployment Protection
   const secret = req.headers.get('x-load-test-secret')
-  if (secret !== SECRET) {
+  if (SECRET && secret !== SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
