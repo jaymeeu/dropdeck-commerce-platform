@@ -18,12 +18,8 @@ export default function SignUpPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+  const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData((p) => ({ ...p, [e.target.name]: e.target.value }))
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -31,19 +27,16 @@ export default function SignUpPage() {
     setError('')
     setIsLoading(true)
 
-    // Validation
     if (!formData.email || !formData.password || !formData.name) {
       setError('Please fill in all fields')
       setIsLoading(false)
       return
     }
-
     if (formData.password.length < 8) {
       setError('Password must be at least 8 characters')
       setIsLoading(false)
       return
     }
-
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match')
       setIsLoading(false)
@@ -51,162 +44,91 @@ export default function SignUpPage() {
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-          role: formData.role,
-        }),
+        body: JSON.stringify({ email: formData.email, password: formData.password, name: formData.name, role: formData.role }),
       })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Registration failed'); setIsLoading(false); return }
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Registration failed')
-        setIsLoading(false)
-        return
-      }
-
-      // Sign in after successful registration
-      const signInResult = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      })
-
+      const signInResult = await signIn('credentials', { email: formData.email, password: formData.password, redirect: false })
       if (signInResult?.ok) {
         router.push('/')
         router.refresh()
       } else {
-        setError('Registration successful. Please sign in.')
         router.push('/auth/signin')
       }
-    } catch (err) {
+    } catch {
       setError('An error occurred. Please try again.')
-      console.error('[v0] Sign up error:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
+  const inputClass = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-[#6366f1] transition-colors'
+  const labelClass = 'block text-sm font-medium text-muted-foreground mb-2'
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Join DropDeck</h1>
-          <p className="text-muted-foreground">Create your account to get started</p>
+
+        <div className="text-center mb-10">
+          <Link href="/" className="text-3xl font-black tracking-tighter bg-gradient-to-r from-[#6366f1] to-[#f59e0b] bg-clip-text text-transparent">
+            DropDeck
+          </Link>
+          <h1 className="text-2xl font-bold text-foreground mt-6 mb-2">Create your account</h1>
+          <p className="text-muted-foreground">Join the flash drop platform</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
+        <div className="bg-card border border-white/8 rounded-2xl p-8">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="name" className={labelClass}>Full Name</label>
+              <input id="name" name="name" type="text" value={formData.name} onChange={handle} placeholder="Jordan Smith" required disabled={isLoading} className={inputClass} />
             </div>
-          )}
 
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium mb-1">
-              Full Name
-            </label>
-            <input
-              id="name"
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="John Doe"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
+            <div>
+              <label htmlFor="email" className={labelClass}>Email</label>
+              <input id="email" name="email" type="email" value={formData.email} onChange={handle} placeholder="you@example.com" required disabled={isLoading} className={inputClass} />
+            </div>
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-1">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="you@example.com"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
+            <div>
+              <label htmlFor="role" className={labelClass}>Account Type</label>
+              <select id="role" name="role" value={formData.role} onChange={handle} disabled={isLoading} className={inputClass}>
+                <option value="buyer">Buyer — discover and buy drops</option>
+                <option value="seller">Seller — create and run drops</option>
+              </select>
+            </div>
 
-          <div>
-            <label htmlFor="role" className="block text-sm font-medium mb-1">
-              Account Type
-            </label>
-            <select
-              id="role"
-              name="role"
-              value={formData.role}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            >
-              <option value="buyer">Buyer (Buy drops)</option>
-              <option value="seller">Seller (Create drops)</option>
-            </select>
-          </div>
+            <div>
+              <label htmlFor="password" className={labelClass}>Password</label>
+              <input id="password" name="password" type="password" value={formData.password} onChange={handle} placeholder="Min. 8 characters" required disabled={isLoading} className={inputClass} />
+            </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
+            <div>
+              <label htmlFor="confirmPassword" className={labelClass}>Confirm Password</label>
+              <input id="confirmPassword" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handle} placeholder="••••••••" required disabled={isLoading} className={inputClass} />
+            </div>
 
-          <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1">
-              Confirm Password
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              placeholder="••••••••"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isLoading}
-            />
-          </div>
+            <Button type="submit" disabled={isLoading} className="w-full bg-[#6366f1] hover:bg-[#6366f1]/90 text-white font-semibold py-3 rounded-xl">
+              {isLoading ? 'Creating account...' : 'Create Account'}
+            </Button>
+          </form>
+        </div>
 
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="w-full"
-          >
-            {isLoading ? 'Creating account...' : 'Sign Up'}
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-muted-foreground">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <Link href="/auth/signin" className="text-blue-600 hover:underline font-medium">
+          <Link href="/auth/signin" className="text-[#6366f1] hover:text-[#6366f1]/80 font-medium">
             Sign in
           </Link>
-        </div>
+        </p>
       </div>
     </div>
   )

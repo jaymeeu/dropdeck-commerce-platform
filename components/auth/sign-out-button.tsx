@@ -12,7 +12,7 @@ export function SignOutButton() {
   }
 
   return (
-    <Button variant="outline" onClick={handleSignOut}>
+    <Button variant="outline" size="sm" onClick={handleSignOut} className="border-white/20 hover:border-red-500/50 hover:text-red-400 transition-colors">
       Sign Out
     </Button>
   )

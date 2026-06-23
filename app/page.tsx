@@ -1,10 +1,9 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { auth } from '@/lib/auth/auth'
 import { getLiveDrops, getScheduledDrops, getDropsByStatus } from '@/lib/actions/drops'
 import { DropCard } from '@/components/drops/drop-card'
+import { Nav } from '@/components/layout/nav'
 import { Button } from '@/components/ui/button'
-import { SignOutButton } from '@/components/auth/sign-out-button'
 
 export const metadata: Metadata = {
   title: 'DropDeck - Buy Limited Releases',
@@ -12,8 +11,6 @@ export const metadata: Metadata = {
 }
 
 export default async function StorefrontPage() {
-  const session = await auth()
-
   // Fetch drops in parallel - handle missing database gracefully
   let liveDrops = []
   let scheduledDrops = []
@@ -31,44 +28,7 @@ export default async function StorefrontPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Navigation */}
-      <header className="fixed w-full top-0 z-50 bg-background/80 backdrop-blur border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            DropDeck
-          </Link>
-
-          <nav className="flex items-center gap-3">
-            {session?.user ? (
-              <>
-                {session.user.role === 'seller' && (
-                  <Link href="/seller/dashboard">
-                    <Button variant="ghost" size="sm">Seller</Button>
-                  </Link>
-                )}
-                {session.user.role === 'admin' && (
-                  <Link href="/admin">
-                    <Button variant="ghost" size="sm">Admin</Button>
-                  </Link>
-                )}
-                <Link href="/orders">
-                  <Button variant="ghost" size="sm">Orders</Button>
-                </Link>
-                <SignOutButton />
-              </>
-            ) : (
-              <>
-                <Link href="/auth/signin">
-                  <Button variant="ghost" size="sm">Sign In</Button>
-                </Link>
-                <Link href="/auth/signup">
-                  <Button size="sm" className="bg-primary hover:bg-primary/90">Sign Up</Button>
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <Nav />
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-6 relative overflow-hidden">
