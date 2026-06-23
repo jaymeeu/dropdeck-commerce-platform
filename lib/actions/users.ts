@@ -2,6 +2,7 @@
 
 import { query } from '../db'
 import { hashPassword, comparePassword } from '../auth/password'
+import { slugify } from '../utils'
 import type { User, UserRole, SellerProfile } from '../types'
 
 /**
@@ -126,6 +127,39 @@ export async function updateUser(
 }
 
 /**
+ * Create seller profile at registration
+ */
+export async function createSellerProfile(
+  userId: string,
+  storeName: string,
+  storeSlug?: string,
+): Promise<SellerProfile> {
+  const user = await getUserById(userId)
+  if (!user) throw new Error('User not found')
+  if (user.role !== 'seller') throw new Error('User is not a seller')
+
+  const existing = await query(
+    `SELECT id FROM seller_profiles WHERE user_id = $1`,
+    [userId],
+  )
+  if (existing.rows.length > 0) {
+    throw new Error('Seller profile already exists')
+  }
+
+  const baseSlug = slugify(storeSlug || storeName)
+  const uniqueSlug = await ensureUniqueStoreSlug(baseSlug)
+
+  const createResult = await query(
+    `INSERT INTO seller_profiles (user_id, store_name, store_slug, payout_email)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, user_id, store_name, store_slug, bio, payout_email, stripe_account_id, created_at`,
+    [userId, storeName.trim(), uniqueSlug, user.email],
+  )
+
+  return mapSellerProfileRow(createResult.rows[0])
+}
+
+/**
  * Get or create seller profile
  */
 export async function getOrCreateSellerProfile(userId: string): Promise<SellerProfile> {
@@ -149,12 +183,12 @@ export async function getOrCreateSellerProfile(userId: string): Promise<SellerPr
   }
 
   // Create default seller profile
-  const storeSlug = `store-${userId.slice(0, 8)}`
+  const storeSlug = await ensureUniqueStoreSlug(slugify(user.name))
   const createResult = await query(
-    `INSERT INTO seller_profiles (user_id, store_name, store_slug)
-     VALUES ($1, $2, $3)
+    `INSERT INTO seller_profiles (user_id, store_name, store_slug, payout_email)
+     VALUES ($1, $2, $3, $4)
      RETURNING id, user_id, store_name, store_slug, bio, payout_email, stripe_account_id, created_at`,
-    [userId, user.name, storeSlug],
+    [userId, user.name, storeSlug, user.email],
   )
 
   return mapSellerProfileRow(createResult.rows[0])
@@ -276,5 +310,20 @@ function mapSellerProfileRow(row: any): SellerProfile {
     payoutEmail: row.payout_email,
     stripeAccountId: row.stripe_account_id,
     createdAt: new Date(row.created_at),
+  }
+}
+
+async function ensureUniqueStoreSlug(baseSlug: string): Promise<string> {
+  let slug = baseSlug
+  let suffix = 2
+
+  while (true) {
+    const existing = await query(
+      `SELECT id FROM seller_profiles WHERE store_slug = $1`,
+      [slug],
+    )
+    if (existing.rows.length === 0) return slug
+    slug = `${baseSlug}-${suffix}`
+    suffix++
   }
 }

@@ -3,26 +3,26 @@
 /**
  * Load Test Script for DropDeck
  *
- * Tests the zero-oversell guarantee by firing concurrent checkout requests
- * against a single drop with known stock.
+ * Tests the zero-oversell guarantee by firing concurrent checkout attempts
+ * directly against the database layer (no HTTP auth required).
  *
  * Usage:
  *   npx tsx scripts/load-test.ts
  *
  * Prerequisites:
- * 1. Database must be populated with seed data (npx tsx scripts/migrate.ts)
- * 2. Development server must be running (pnpm dev)
- * 3. Test drop must exist and be in 'live' status
+ * 1. Database populated with seed data (npx tsx scripts/migrate.ts)
+ * 2. .env.local configured with Aurora credentials
  */
 
-import http from 'http'
+import { attemptCheckout } from '../lib/actions/checkout'
+import { syncDropLifecycle } from '../lib/drop-lifecycle'
+import { query } from '../lib/db'
+import { hashPassword } from '../lib/auth/password'
 
-// Configuration
-const DROP_ID = 'd1111111-1111-1111-1111-111111111111' // Nike Air Jordan from seed data
-const BUYER_BASE_ID = '33333333-3333-3333-3333-33333333333' // Buyer prefix (we'll vary the last char)
-const CONCURRENT_REQUESTS = 150 // Number of concurrent checkout attempts
-const API_URL = 'http://localhost:3000/api/checkout'
-const EXPECTED_SUCCESS_COUNT = 100 // Drop has 100 units in seed data
+const DROP_ID = 'b1111111-1111-1111-1111-111111111111'
+const CONCURRENT_REQUESTS = 150
+const EXPECTED_SUCCESS_COUNT = 100
+const TEST_BUYER_COUNT = 150
 
 interface CheckoutResult {
   success: boolean
@@ -43,129 +43,97 @@ interface LoadTestStats {
   maxLatency: number
 }
 
-/**
- * Make a checkout request
- */
-function makeCheckoutRequest(buyerId: string): Promise<CheckoutResult> {
-  return new Promise((resolve, reject) => {
-    const postData = JSON.stringify({
-      dropId: DROP_ID,
-      buyerId,
-      quantity: 1,
-    })
-
-    const options = {
-      hostname: 'localhost',
-      port: 3000,
-      path: '/api/checkout',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': postData.length,
-      },
-      timeout: 30000,
-    }
-
-    const startTime = Date.now()
-
-    const req = http.request(options, (res) => {
-      let data = ''
-
-      res.on('data', (chunk) => {
-        data += chunk
-      })
-
-      res.on('end', () => {
-        const latencyMs = Date.now() - startTime
-
-        try {
-          const response = JSON.parse(data)
-          resolve({
-            success: response.success || false,
-            orderId: response.order?.id,
-            errorCode: response.errorCode,
-            latencyMs,
-          })
-        } catch (err) {
-          resolve({
-            success: false,
-            errorCode: 'parse_error',
-            latencyMs,
-          })
-        }
-      })
-    })
-
-    req.on('error', (err) => {
-      const latencyMs = Date.now() - startTime
-      console.error('[Load Test] Request error:', err.message)
-      resolve({
-        success: false,
-        errorCode: 'request_error',
-        latencyMs,
-      })
-    })
-
-    req.on('timeout', () => {
-      req.destroy()
-      const latencyMs = Date.now() - startTime
-      resolve({
-        success: false,
-        errorCode: 'timeout',
-        latencyMs,
-      })
-    })
-
-    req.write(postData)
-    req.end()
-  })
+function testBuyerId(index: number): string {
+  const suffix = String(index).padStart(12, '0')
+  return `00000000-0000-4000-8000-${suffix}`
 }
 
-/**
- * Run the load test
- */
+async function ensureTestBuyers(): Promise<void> {
+  const passwordHash = await hashPassword('loadtest-password')
+
+  for (let i = 0; i < TEST_BUYER_COUNT; i++) {
+    const id = testBuyerId(i)
+    const email = `loadtest-${String(i).padStart(4, '0')}@dropdeck.test`
+
+    await query(
+      `INSERT INTO users (id, email, password_hash, role, name)
+       VALUES ($1, $2, $3, 'buyer', $4)
+       ON CONFLICT (id) DO NOTHING`,
+      [id, email, passwordHash, `Load Test Buyer ${i}`],
+    )
+  }
+}
+
+async function resetDropOrders(): Promise<void> {
+  await query(`DELETE FROM checkout_log WHERE drop_id = $1`, [DROP_ID])
+  await query(`DELETE FROM orders WHERE drop_id = $1`, [DROP_ID])
+  await query(
+    `UPDATE drops SET status = 'live', updated_at = NOW() WHERE id = $1`,
+    [DROP_ID],
+  )
+}
+
+async function runCheckout(buyerIndex: number): Promise<CheckoutResult> {
+  const startTime = Date.now()
+  const buyerId = testBuyerId(buyerIndex)
+
+  try {
+    const result = await attemptCheckout(DROP_ID, buyerId, 1)
+    return {
+      success: result.success,
+      orderId: result.order?.id,
+      errorCode: result.errorCode,
+      latencyMs: result.latencyMs ?? Date.now() - startTime,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      errorCode: 'error',
+      latencyMs: Date.now() - startTime,
+    }
+  }
+}
+
 async function runLoadTest() {
   console.log('\n╔═══════════════════════════════════════════════════════════════╗')
   console.log('║            DropDeck Load Test - Zero Oversell Guarantee       ║')
   console.log('╚═══════════════════════════════════════════════════════════════╝\n')
 
+  console.log('Preparing test environment...')
+  await ensureTestBuyers()
+  await resetDropOrders()
+  await syncDropLifecycle(DROP_ID)
+
   console.log(`Configuration:`)
   console.log(`  - Drop ID: ${DROP_ID}`)
   console.log(`  - Concurrent Requests: ${CONCURRENT_REQUESTS}`)
-  console.log(`  - Expected Successful Orders: ${EXPECTED_SUCCESS_COUNT}`)
-  console.log(`  - API URL: ${API_URL}\n`)
+  console.log(`  - Test Buyers: ${TEST_BUYER_COUNT}`)
+  console.log(`  - Expected Successful Orders: ${EXPECTED_SUCCESS_COUNT}\n`)
 
   console.log('Starting load test...\n')
 
   const startTime = Date.now()
-  const results: CheckoutResult[] = []
-
-  // Fire concurrent requests
   const promises: Promise<CheckoutResult>[] = []
 
   for (let i = 0; i < CONCURRENT_REQUESTS; i++) {
-    const buyerId = `${BUYER_BASE_ID}${String(i % 10).padStart(1, '0')}`
-    promises.push(makeCheckoutRequest(buyerId))
-
-    // Print progress
+    promises.push(runCheckout(i % TEST_BUYER_COUNT))
     if ((i + 1) % 10 === 0) {
       process.stdout.write(`\r  Progress: ${i + 1}/${CONCURRENT_REQUESTS} requests sent`)
     }
   }
 
-  const responses = await Promise.all(promises)
-  results.push(...responses)
-
+  const results = await Promise.all(promises)
   console.log(`\r  Progress: ${CONCURRENT_REQUESTS}/${CONCURRENT_REQUESTS} requests completed\n`)
 
-  // Analyze results
   const stats: LoadTestStats = {
     totalRequests: results.length,
     successCount: results.filter((r) => r.success).length,
     failedCount: results.filter((r) => !r.success).length,
     soldOutCount: results.filter((r) => !r.success && r.errorCode === 'sold_out').length,
     limitExceededCount: results.filter((r) => !r.success && r.errorCode === 'limit_exceeded').length,
-    otherErrorCount: results.filter((r) => !r.success && r.errorCode !== 'sold_out' && r.errorCode !== 'limit_exceeded').length,
+    otherErrorCount: results.filter(
+      (r) => !r.success && r.errorCode !== 'sold_out' && r.errorCode !== 'limit_exceeded',
+    ).length,
     avgLatency: Math.round(results.reduce((sum, r) => sum + r.latencyMs, 0) / results.length),
     minLatency: Math.min(...results.map((r) => r.latencyMs)),
     maxLatency: Math.max(...results.map((r) => r.latencyMs)),
@@ -173,7 +141,6 @@ async function runLoadTest() {
 
   const totalTime = Date.now() - startTime
 
-  // Print results
   console.log('╔═══════════════════════════════════════════════════════════════╗')
   console.log('║                         Test Results                          ║')
   console.log('╠═══════════════════════════════════════════════════════════════╣')
@@ -190,9 +157,7 @@ async function runLoadTest() {
   console.log(`║ Total Time:               ${String(`${totalTime}ms`).padStart(42)}║`)
   console.log('╠═══════════════════════════════════════════════════════════════╣')
 
-  // Validate zero-oversell guarantee
   const testPassed = stats.successCount === EXPECTED_SUCCESS_COUNT
-  const statusIcon = testPassed ? '✓' : '✗'
   const statusText = testPassed ? 'PASS' : 'FAIL'
   const statusColor = testPassed ? '\x1b[32m' : '\x1b[31m'
 
@@ -208,11 +173,9 @@ async function runLoadTest() {
 
   console.log('╚═══════════════════════════════════════════════════════════════╝\n')
 
-  // Exit with appropriate code
   process.exit(testPassed ? 0 : 1)
 }
 
-// Run if executed directly
 if (require.main === module) {
   runLoadTest().catch((err) => {
     console.error('Load test error:', err)

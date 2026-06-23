@@ -2,15 +2,19 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth/auth'
 import { getSellerDrops, getAvailableStock } from '@/lib/actions/drops'
+import { getOrCreateSellerProfile } from '@/lib/actions/users'
 import { query } from '@/lib/db'
 import { Button } from '@/components/ui/button'
 import { Nav } from '@/components/layout/nav'
+import { DashboardAutoRefresh } from '@/components/seller/dashboard-auto-refresh'
 
 export const metadata = { title: 'Seller Dashboard — DropDeck' }
 
 export default async function SellerDashboardPage() {
   const session = await auth()
   if (!session?.user || (session.user as any).role !== 'seller') redirect('/auth/signin')
+
+  await getOrCreateSellerProfile(session.user.id!)
 
   const drops = await getSellerDrops(session.user.id!)
 
@@ -50,6 +54,7 @@ export default async function SellerDashboardPage() {
 
   return (
     <>
+      <DashboardAutoRefresh />
       <Nav />
       <main className="min-h-screen bg-background pt-24 pb-16 px-6">
         <div className="max-w-7xl mx-auto">
@@ -133,11 +138,21 @@ export default async function SellerDashboardPage() {
                       </td>
                       <td className="px-6 py-4 text-foreground">{drop.totalOrders}</td>
                       <td className="px-6 py-4">
-                        <Link href={`/seller/drops/${drop.id}/analytics`}>
-                          <Button variant="outline" size="sm" className="border-white/20 hover:border-[#6366f1]">
-                            Analytics
-                          </Button>
-                        </Link>
+                        <div className="flex gap-2">
+                          {drop.status === 'draft' ? (
+                            <Link href={`/seller/drops/${drop.id}/publish`}>
+                              <Button size="sm" className="bg-[#6366f1] hover:bg-[#6366f1]/90 text-white">
+                                Publish
+                              </Button>
+                            </Link>
+                          ) : (
+                            <Link href={`/seller/drops/${drop.id}/analytics`}>
+                              <Button variant="outline" size="sm" className="border-white/20 hover:border-[#6366f1]">
+                                Analytics
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

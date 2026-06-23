@@ -1,25 +1,17 @@
 /**
  * POST /api/auth/register
  * Register a new user
- *
- * Request body:
- * {
- *   email: string
- *   password: string
- *   name: string
- *   role?: 'buyer' | 'seller'
- * }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createUser } from '@/lib/actions/users'
+import { createUser, createSellerProfile } from '@/lib/actions/users'
+import { slugify } from '@/lib/utils'
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { email, password, name, role = 'buyer' } = body
+    const { email, password, name, role = 'buyer', storeName, storeSlug } = body
 
-    // Validation
     if (!email || !password || !name) {
       return NextResponse.json(
         { error: 'Missing required fields: email, password, name' },
@@ -41,8 +33,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create user
+    if (role === 'seller') {
+      if (!storeName?.trim()) {
+        return NextResponse.json(
+          { error: 'Store name is required for seller accounts' },
+          { status: 400 },
+        )
+      }
+      const slug = slugify(storeSlug || storeName)
+      if (slug.length < 2) {
+        return NextResponse.json(
+          { error: 'Store URL slug must be at least 2 characters' },
+          { status: 400 },
+        )
+      }
+    }
+
     const user = await createUser(email, password, name, role)
+
+    if (role === 'seller') {
+      await createSellerProfile(user.id, storeName.trim(), storeSlug || storeName)
+    }
 
     return NextResponse.json(
       {
@@ -58,15 +69,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Registration failed'
 
-    if (message.includes('already exists')) {
-      return NextResponse.json(
-        { error: message },
-        { status: 409 },
-      )
+    if (message.includes('already exists') || message.includes('already in use')) {
+      return NextResponse.json({ error: message }, { status: 409 })
     }
 
     return NextResponse.json(
-      { error: 'Registration failed' },
+      { error: message || 'Registration failed' },
       { status: 500 },
     )
   }

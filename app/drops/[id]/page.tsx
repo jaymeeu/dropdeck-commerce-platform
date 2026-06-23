@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { getDrop, getAvailableStock } from '@/lib/actions/drops'
-import { attemptCheckout } from '@/lib/actions/checkout'
+import { attemptCheckoutAuthenticated } from '@/lib/actions/checkout'
 import { Button } from '@/components/ui/button'
 import { Nav } from '@/components/layout/nav'
 import type { Drop } from '@/lib/types'
@@ -39,11 +39,15 @@ export default function DropDetailPage() {
 
   useEffect(() => { loadDrop() }, [loadDrop])
 
-  // Poll stock every 5s
+  // Poll drop status and stock every 5s
   useEffect(() => {
     const interval = setInterval(async () => {
-      const s = await getAvailableStock(id)
-      setStock(s)
+      const data = await getDrop(id)
+      if (data) {
+        setDrop(data)
+        const s = await getAvailableStock(id)
+        setStock(s)
+      }
     }, 5000)
     return () => clearInterval(interval)
   }, [id])
@@ -53,9 +57,24 @@ export default function DropDetailPage() {
     if (!drop) return
     const tick = () => {
       const now = Date.now()
-      const target = drop.status === 'scheduled' ? new Date(drop.startTime).getTime() : new Date(drop.endTime).getTime()
+      let target: number | null = null
+      if (drop.status === 'scheduled') {
+        target = new Date(drop.startTime).getTime()
+      } else if (drop.endTime) {
+        target = new Date(drop.endTime).getTime()
+      }
+
+      if (target === null) {
+        setTimeLeft('')
+        return
+      }
+
       const diff = target - now
-      if (diff <= 0) { setTimeLeft('00:00:00'); loadDrop(); return }
+      if (diff <= 0) {
+        setTimeLeft('00:00:00')
+        loadDrop()
+        return
+      }
       const h = Math.floor(diff / 3600000)
       const m = Math.floor((diff % 3600000) / 60000)
       const s = Math.floor((diff % 60000) / 1000)
@@ -71,10 +90,10 @@ export default function DropDetailPage() {
     setError('')
     setIsCheckingOut(true)
     try {
-      const result = await attemptCheckout(id, user.id, quantity)
-      if (result.success) {
+      const result = await attemptCheckoutAuthenticated(id, quantity)
+      if (result.success && result.order) {
         setSuccess('Order reserved! Redirecting to payment...')
-        setTimeout(() => router.push('/orders'), 2000)
+        setTimeout(() => router.push(`/orders/${result.order!.id}/pay`), 1500)
       } else {
         setError(result.error || 'Checkout failed')
       }

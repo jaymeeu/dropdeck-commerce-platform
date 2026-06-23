@@ -5,36 +5,33 @@
  * Request body:
  * {
  *   dropId: string
- *   buyerId: string
  *   quantity: number
- * }
- *
- * Response:
- * {
- *   success: boolean
- *   order?: Order
- *   error?: string
- *   errorCode?: CheckoutOutcome
- *   latencyMs?: number
  * }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth/auth'
 import { attemptCheckout } from '@/lib/actions/checkout'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { dropId, buyerId, quantity } = body
+    const session = await auth()
 
-    if (!dropId || !buyerId || quantity === undefined) {
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { dropId, quantity } = body
+
+    if (!dropId || quantity === undefined) {
       return NextResponse.json(
-        { error: 'Missing required fields: dropId, buyerId, quantity' },
+        { error: 'Missing required fields: dropId, quantity' },
         { status: 400 },
       )
     }
 
-    const result = await attemptCheckout(dropId, buyerId, quantity)
+    const result = await attemptCheckout(dropId, session.user.id, quantity)
 
     return NextResponse.json(result, {
       status: result.success ? 201 : 400,
@@ -47,14 +44,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// OPTIONS for CORS
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },
   })
 }

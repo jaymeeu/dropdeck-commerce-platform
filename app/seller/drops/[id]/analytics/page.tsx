@@ -5,6 +5,7 @@ import { getDrop, getAvailableStock } from '@/lib/actions/drops'
 import { query } from '@/lib/db'
 import { Nav } from '@/components/layout/nav'
 import { Button } from '@/components/ui/button'
+import { ExportOrdersButton } from '@/components/seller/export-orders-button'
 
 export const metadata = { title: 'Drop Analytics — DropDeck' }
 
@@ -116,7 +117,10 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
           <div className="bg-card border border-white/8 rounded-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between">
               <h2 className="text-lg font-bold text-foreground">Recent Orders</h2>
-              <span className="text-sm text-muted-foreground">{orderStats.total_orders} total</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">{orderStats.total_orders} total</span>
+                <ExportOrdersButton dropId={id} />
+              </div>
             </div>
             {recentOrders.rows.length === 0 ? (
               <div className="px-6 py-12 text-center text-muted-foreground">No orders yet</div>

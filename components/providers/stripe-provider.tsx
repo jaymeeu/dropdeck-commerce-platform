@@ -2,18 +2,21 @@
 
 import React from 'react'
 import { Elements } from '@stripe/react-stripe-js'
-import { loadStripe } from '@stripe/stripe-js'
+import { loadStripe, type Stripe } from '@stripe/stripe-js'
 
-if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-  throw new Error('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set')
-}
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+const stripePromise: Promise<Stripe | null> | null = publishableKey
+  ? loadStripe(publishableKey)
+  : null
 
 export function StripeProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <Elements stripe={stripePromise}>
-      {children}
-    </Elements>
-  )
+  if (!stripePromise) {
+    return <>{children}</>
+  }
+
+  return <Elements stripe={stripePromise}>{children}</Elements>
+}
+
+export function isStripeConfigured() {
+  return Boolean(publishableKey)
 }

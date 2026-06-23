@@ -44,6 +44,15 @@ export const env = {
   PLATFORM_FEE_PERCENT: Number(process.env.PLATFORM_FEE_PERCENT || '5'),
   RESERVATION_TIMEOUT_SECONDS: Number(process.env.RESERVATION_TIMEOUT_SECONDS || '300'),
   MAX_UNITS_PER_BUYER: Number(process.env.MAX_UNITS_PER_BUYER || '5'),
+
+  // Payments — set SIMULATE_PAYMENTS=true to skip Stripe (demo/dev)
+  SIMULATE_PAYMENTS:
+    process.env.SIMULATE_PAYMENTS === 'true' ||
+    (process.env.NODE_ENV === 'development' && !process.env.STRIPE_SECRET_KEY),
+  NEXT_PUBLIC_SIMULATE_PAYMENTS:
+    process.env.NEXT_PUBLIC_SIMULATE_PAYMENTS === 'true' ||
+    process.env.SIMULATE_PAYMENTS === 'true' ||
+    (process.env.NODE_ENV === 'development' && !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY),
 }
 
 /**

@@ -62,9 +62,19 @@ export default async function OrdersPage() {
                     <p className="text-sm text-muted-foreground">Qty: {order.quantity}</p>
                   </div>
 
-                  <span className={`shrink-0 px-4 py-2 rounded-lg text-xs font-semibold ${statusStyles[order.status] || statusStyles.expired}`}>
-                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                  </span>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <span className={`px-4 py-2 rounded-lg text-xs font-semibold ${statusStyles[order.status] || statusStyles.expired}`}>
+                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                    </span>
+                    {order.status === 'reserved' && (
+                      <Link
+                        href={`/orders/${order.id}/pay`}
+                        className="text-xs font-semibold text-[#6366f1] hover:underline"
+                      >
+                        Pay now →
+                      </Link>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

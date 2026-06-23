@@ -77,6 +77,7 @@ export interface DropWithSeller extends Drop {
     storeName: string
     storeSlug: string
   }
+  availableStock?: number
 }
 
 export interface OrderWithDrop extends Order {
