@@ -139,9 +139,6 @@ export async function attemptCheckout(
 
     const latencyMs = Date.now() - startTime
 
-    // Log successful checkout
-    console.log(`[v0] Checkout success for drop ${dropId}, buyer ${buyerId}, quantity ${quantity}, latency ${latencyMs}ms`)
-
     return {
       success: true,
       order,
@@ -151,10 +148,6 @@ export async function attemptCheckout(
     const latencyMs = Date.now() - startTime
 
     if (error instanceof CheckoutError) {
-      console.log(
-        `[v0] Checkout failed: ${error.code} - ${error.message} (latency ${latencyMs}ms)`,
-      )
-
       return {
         success: false,
         error: error.message,
@@ -163,7 +156,6 @@ export async function attemptCheckout(
       }
     }
 
-    console.error('[v0] Checkout error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
