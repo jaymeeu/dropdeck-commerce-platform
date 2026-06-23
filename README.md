@@ -11,7 +11,8 @@ DropDeck is a production-grade flash sale platform built with Next.js 16, Aurora
 - **Role-Based Access** - Separate buyer, seller, and admin experiences
 - **Atomic Transactions** - All checkout operations are ACID-compliant
 - **Stripe Payments** - Complete payment integration with webhook handling
-- **Reservation System** - 5-minute expiry on reserved orders frees stock automatically
+- **Reservation System** - 5-minute expiry on reserved orders frees stock automatically via PostgreSQL triggers
+- **Auto-Automation** - Database triggers handle all state transitions (no Cron fee)
 - **Live Analytics** - Real-time sales dashboards for sellers
 - **Admin Panel** - Platform-wide metrics and drop management
 
@@ -86,7 +87,6 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 PLATFORM_FEE_PERCENT=5
 RESERVATION_TIMEOUT_SECONDS=300
 MAX_UNITS_PER_BUYER=5
-CRON_SECRET=your-secret
 ```
 
 ### Installation

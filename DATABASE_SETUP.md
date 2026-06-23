@@ -89,14 +89,15 @@ This **serializes concurrent checkout attempts** at the database layer:
 - No Redis lock needed
 - Database handles all concurrency
 
-### 2. Reservation Expiry
+### 2. Reservation Expiry (PostgreSQL Triggers)
 
-Orders in `reserved` status expire after `RESERVATION_TIMEOUT_SECONDS` (default: 5 minutes).
+Orders in `reserved` status expire automatically via **database triggers** (no external cron needed).
 
-The `/api/drops/status` cron job (runs every minute):
-- Marks expired orders as `expired`
-- Automatically frees up stock
-- If stock is available, transitions drop from `sold_out` back to `live`
+**Automation is handled by PostgreSQL triggers** (completely free, instant, guaranteed):
+- `check_order_expiry()` trigger marks orders as `expired` when `expires_at <= NOW()`
+- `check_drop_stock_on_order_change()` trigger automatically frees stock when orders expire/refund
+- If stock becomes available, drop is auto-transitioned from `sold_out` back to `live` if still in live window
+- No Vercel Cron fee, no external service dependency
 
 ### 3. Stock Calculation
 
@@ -184,9 +185,6 @@ AWS_ROLE_ARN=arn:aws:iam::123456789:role/...
 PGHOST=aurora-db.123456.us-east-1.rds.amazonaws.com
 PGUSER=postgres
 PGDATABASE=dropdeck
-
-# Cron authentication
-CRON_SECRET=your-secret-here
 
 # Platform config
 PLATFORM_FEE_PERCENT=5
