@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { query } from '@/lib/db'
+import { attemptCheckout } from '@/lib/actions/checkout'
 
-// Vercel Deployment Protection handles auth for this endpoint
-// VERCEL_URL is set automatically on all preview/production deployments
-const BASE_URL = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : (process.env.NEXTAUTH_URL ?? 'https://dropdeck-commerce-platform.vercel.app')
 const TOTAL_STOCK = 100
 const CONCURRENCY = 150
 const TEST_PREFIX = 'loadtest_'
@@ -15,14 +11,8 @@ const TEST_PREFIX = 'loadtest_'
 async function checkoutRequest(dropId: string, buyerId: string): Promise<{ success: boolean; errorCode?: string; latency: number }> {
   const start = Date.now()
   try {
-    const res = await fetch(`${BASE_URL}/api/checkout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dropId, buyerId, quantity: 1 }),
-      signal: AbortSignal.timeout(30000),
-    })
-    const json = await res.json()
-    return { success: json.success, errorCode: json.errorCode, latency: Date.now() - start }
+    const result = await attemptCheckout(dropId, buyerId, 1)
+    return { success: result.success, errorCode: result.errorCode, latency: Date.now() - start }
   } catch {
     return { success: false, errorCode: 'request_error', latency: Date.now() - start }
   }
