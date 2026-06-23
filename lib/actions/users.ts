@@ -69,26 +69,12 @@ export async function authenticateUser(
   email: string,
   password: string,
 ): Promise<User | null> {
-  console.log('[v0] Authenticating user:', email)
-  
   const user = await getUserByEmail(email)
-  console.log('[v0] User found:', user ? `${user.id} (${user.name})` : 'null')
-  
-  if (!user) {
-    console.log('[v0] User not found in database')
-    return null
-  }
+  if (!user) return null
 
-  console.log('[v0] Comparing password. Hash starts with:', user.passwordHash?.substring(0, 10))
   const valid = await comparePassword(password, user.passwordHash)
-  console.log('[v0] Password comparison result:', valid)
-  
-  if (!valid) {
-    console.log('[v0] Password is invalid')
-    return null
-  }
+  if (!valid) return null
 
-  console.log('[v0] Authentication successful')
   return user
 }
 

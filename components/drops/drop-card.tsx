@@ -25,52 +25,56 @@ export function DropCard({ drop, availableStock }: DropCardProps) {
 
   const statusColor =
     isLive && availableStock && availableStock <= 5
-      ? 'bg-red-100 text-red-800'
+      ? 'bg-accent/20 text-accent border border-accent/50'
       : isLive
-        ? 'bg-green-100 text-green-800'
+        ? 'bg-primary/20 text-primary border border-primary/50'
         : isSoldOut
-          ? 'bg-gray-100 text-gray-800'
+          ? 'bg-muted text-muted-foreground border border-border'
           : isScheduled
-            ? 'bg-blue-100 text-blue-800'
-            : 'bg-gray-100 text-gray-800'
+            ? 'bg-primary/10 text-primary border border-primary/30'
+            : 'bg-muted text-muted-foreground border border-border'
 
   const price = drop.price / 100 // Convert cents to dollars
 
   return (
     <Link href={`/drops/${drop.id}`}>
-      <div className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer">
+      <div className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/50 transition-all duration-300 cursor-pointer hover:shadow-lg hover:shadow-primary/10">
         {/* Image */}
-        <div className="relative h-48 bg-gray-200 overflow-hidden">
+        <div className="relative h-64 bg-muted overflow-hidden">
           {drop.imageUrls[0] ? (
             <img
               src={drop.imageUrls[0]}
               alt={drop.title}
-              className="w-full h-full object-cover hover:scale-105 transition-transform"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400">
-              No image
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <div className="text-4xl mb-2">📦</div>
+                <p>No image</p>
+              </div>
             </div>
           )}
 
           {/* Status Badge */}
-          <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-semibold ${statusColor}`}>
+          <div className={`absolute top-4 right-4 px-4 py-2 rounded-lg text-xs font-semibold ${statusColor} backdrop-blur-sm`}>
             {timeText}
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-4">
-          <h3 className="font-semibold text-lg mb-1 line-clamp-2">{drop.title}</h3>
+        <div className="p-6">
+          <h3 className="font-bold text-lg mb-2 line-clamp-2 text-foreground group-hover:text-primary transition-colors">{drop.title}</h3>
 
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{drop.description || 'Limited edition drop'}</p>
+          <p className="text-sm text-muted-foreground mb-4 line-clamp-2 h-10">{drop.description || 'Limited edition drop'}</p>
 
-          {/* Price */}
-          <div className="flex items-baseline justify-between">
-            <div className="text-2xl font-bold">${price.toFixed(2)}</div>
+          {/* Price & Time */}
+          <div className="flex items-end justify-between">
+            <div className="text-3xl font-black text-primary">${price.toFixed(2)}</div>
             {isScheduled && drop.startTime && (
-              <div className="text-xs text-gray-500">
-                {drop.startTime.toLocaleDateString()} {drop.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div className="text-xs text-muted-foreground text-right">
+                <div>{drop.startTime.toLocaleDateString()}</div>
+                <div className="font-semibold">{drop.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
             )}
           </div>

@@ -26,43 +26,43 @@ export default async function StorefrontPage() {
       getDropsByStatus('sold_out', 6),
     ])
   } catch (error) {
-    console.log('[v0] Database not initialized yet. Showing empty state.')
+    // Database not initialized - show empty state
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold">
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Navigation */}
+      <header className="fixed w-full top-0 z-50 bg-background/80 backdrop-blur border-b border-border">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="text-2xl font-bold tracking-tighter bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             DropDeck
           </Link>
 
-          <nav className="flex items-center gap-4">
+          <nav className="flex items-center gap-3">
             {session?.user ? (
               <>
                 {session.user.role === 'seller' && (
                   <Link href="/seller/dashboard">
-                    <Button variant="outline">Seller Dashboard</Button>
+                    <Button variant="ghost" size="sm">Seller</Button>
                   </Link>
                 )}
                 {session.user.role === 'admin' && (
                   <Link href="/admin">
-                    <Button variant="outline">Admin</Button>
+                    <Button variant="ghost" size="sm">Admin</Button>
                   </Link>
                 )}
                 <Link href="/orders">
-                  <Button variant="outline">My Orders</Button>
+                  <Button variant="ghost" size="sm">Orders</Button>
                 </Link>
                 <SignOutButton />
               </>
             ) : (
               <>
                 <Link href="/auth/signin">
-                  <Button variant="outline">Sign In</Button>
+                  <Button variant="ghost" size="sm">Sign In</Button>
                 </Link>
                 <Link href="/auth/signup">
-                  <Button>Sign Up</Button>
+                  <Button size="sm" className="bg-primary hover:bg-primary/90">Sign Up</Button>
                 </Link>
               </>
             )}
@@ -71,56 +71,80 @@ export default async function StorefrontPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-accent/10 to-transparent py-20">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <h1 className="text-5xl font-bold mb-4">Limited Edition Drops</h1>
-          <p className="text-xl text-muted-foreground mb-8">
-            Get exclusive access to flash sales with zero-oversell guarantee
+      <section className="pt-32 pb-20 px-6 relative overflow-hidden">
+        {/* Background glow effect */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
+        
+        <div className="max-w-5xl mx-auto text-center relative z-10">
+          <div className="inline-block mb-6 px-4 py-2 rounded-full border border-primary/20 bg-primary/5">
+            <span className="text-sm font-medium text-primary">Limited Releases • Zero Oversell Guarantee</span>
+          </div>
+          
+          <h1 className="text-6xl md:text-7xl font-black tracking-tight mb-6 leading-tight">
+            <span className="block mb-2">Exclusive</span>
+            <span className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent">Flash Drops</span>
+          </h1>
+          
+          <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto leading-relaxed">
+            Discover limited-edition releases from your favorite brands. Buy with confidence—our zero-oversell guarantee means no double-selling, ever.
           </p>
-          <div className="flex gap-4 justify-center">
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="#live-drops">
-              <Button size="lg">Shop Now</Button>
+              <Button size="lg" className="bg-primary hover:bg-primary/90 text-white px-8">
+                Shop Now
+              </Button>
             </Link>
             <Link href="/auth/signup?role=seller">
-              <Button size="lg" variant="outline">
-                Sell Your Drops
+              <Button size="lg" variant="outline" className="px-8">
+                Become a Seller
               </Button>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Live Drops */}
-      <section id="live-drops" className="py-16 bg-background">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-3xl font-bold mb-8">Live Drops</h2>
+      {/* Live Drops - Featured */}
+      <section id="live-drops" className="py-24 px-6 bg-background">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-baseline gap-4 mb-12">
+            <h2 className="text-4xl font-black">Live Now</h2>
+            <div className="h-1 w-12 bg-gradient-to-r from-accent to-primary rounded-full" />
+          </div>
+          
           {liveDrops.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {liveDrops.map((drop) => (
-                <DropCard key={drop.id} drop={drop} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {liveDrops.map((drop) => (
+                  <DropCard key={drop.id} drop={drop} />
+                ))}
+              </div>
+            </>
           ) : (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">No live drops at the moment. Check back soon!</p>
+            <div className="text-center py-20 border border-border/30 rounded-xl">
+              <p className="text-lg text-muted-foreground">No live drops at the moment. Check back soon!</p>
             </div>
           )}
         </div>
       </section>
 
       {/* Upcoming Drops */}
-      <section className="py-16 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4">
-          <h2 className="text-3xl font-bold mb-8">Coming Soon</h2>
+      <section className="py-24 px-6 bg-card/30">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-baseline gap-4 mb-12">
+            <h2 className="text-4xl font-black">Coming Soon</h2>
+            <div className="h-1 w-12 bg-gradient-to-r from-primary to-accent rounded-full" />
+          </div>
+          
           {scheduledDrops.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {scheduledDrops.map((drop) => (
                 <DropCard key={drop.id} drop={drop} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">No upcoming drops scheduled yet.</p>
+            <div className="text-center py-20 border border-border/30 rounded-xl">
+              <p className="text-lg text-muted-foreground">No upcoming drops scheduled yet.</p>
             </div>
           )}
         </div>
@@ -128,10 +152,13 @@ export default async function StorefrontPage() {
 
       {/* Sold Out */}
       {soldOutDrops.length > 0 && (
-        <section className="py-16 bg-background">
-          <div className="max-w-7xl mx-auto px-4">
-            <h2 className="text-3xl font-bold mb-8">Recently Sold Out</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <section className="py-24 px-6 bg-background">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-baseline gap-4 mb-12">
+              <h2 className="text-4xl font-black">Recently Sold Out</h2>
+              <div className="h-1 w-12 bg-muted rounded-full" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {soldOutDrops.map((drop) => (
                 <DropCard key={drop.id} drop={drop} />
               ))}
@@ -141,8 +168,8 @@ export default async function StorefrontPage() {
       )}
 
       {/* Footer */}
-      <footer className="bg-muted border-t py-8">
-        <div className="max-w-7xl mx-auto px-4 text-center text-muted-foreground">
+      <footer className="bg-card/50 border-t border-border py-12 px-6 mt-24">
+        <div className="max-w-7xl mx-auto text-center text-muted-foreground">
           <p>&copy; 2024 DropDeck. All rights reserved.</p>
         </div>
       </footer>
