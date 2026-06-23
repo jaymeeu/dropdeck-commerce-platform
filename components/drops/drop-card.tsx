@@ -63,7 +63,7 @@ export function DropCard({ drop, availableStock }: DropCardProps) {
         <div className="p-4">
           <h3 className="font-semibold text-lg mb-1 line-clamp-2">{drop.title}</h3>
 
-          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{drop.seller.storeName}</p>
+          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{drop.description || 'Limited edition drop'}</p>
 
           {/* Price */}
           <div className="flex items-baseline justify-between">
