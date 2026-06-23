@@ -20,100 +20,120 @@ async function checkoutRequest(dropId: string, buyerId: string): Promise<{ succe
 
 export async function POST(req: NextRequest) {
   const log: string[] = []
-  const sellerId = randomUUID()
-  const dropId   = randomUUID()
-  const pwHash   = await bcrypt.hash('loadtest123', 10)
 
   try {
-    // 1. Create test seller
+    // 1. Create a fresh test drop (live now, 100 units, expires in 1 hour)
+    log.push('[SETUP] Creating test drop...')
+    const dropId = randomUUID()
+    const sellerId = randomUUID()
+
+    // Create seller (required for drop to exist)
     await query(
-      `INSERT INTO users (id, email, password_hash, role, name)
-       VALUES ($1,$2,$3,'seller','Load Test Seller') ON CONFLICT (id) DO NOTHING`,
-      [sellerId, `${TEST_PREFIX}seller@dropdeck.test`, pwHash],
+      `INSERT INTO users (id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (email) DO NOTHING`,
+      [sellerId, `${TEST_PREFIX}seller@test.com`, await bcrypt.hash('test', 10), 'Load Test Seller', 'seller'],
     )
 
-    // 2. Create a live test drop with TOTAL_STOCK units
-    const nowISO = new Date().toISOString()
-    const endISO = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+    // Create drop
+    const now = new Date()
+    const endTime = new Date(now.getTime() + 3600000) // 1 hour from now
     await query(
-      `INSERT INTO drops (id,seller_id,title,description,price,total_stock,max_per_buyer,
-                          start_time,end_time,status,image_urls)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'live','{}')`,
-      [dropId, sellerId, `${TEST_PREFIX}Drop`, 'Load test drop', 2999, TOTAL_STOCK, 1, nowISO, endISO],
+      `INSERT INTO drops (id, seller_id, title, description, price, image_urls, total_stock, max_per_buyer, status, start_time, end_time, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())`,
+      [
+        dropId,
+        sellerId,
+        'Load Test Drop',
+        'Automated load test drop for concurrency verification',
+        10000, // $100
+        [],
+        TOTAL_STOCK,
+        10,
+        'live',
+        now,
+        endTime,
+      ],
     )
-    log.push(`Drop created: ${dropId} | stock: ${TOTAL_STOCK}`)
+    log.push(`✓ Drop created: ${dropId}`)
 
-    // 3. Create CONCURRENCY unique buyers
+    // 2. Create 150 unique buyer accounts
+    log.push(`[SETUP] Creating ${CONCURRENCY} buyer accounts...`)
     const buyers: { id: string; email: string }[] = []
     for (let i = 0; i < CONCURRENCY; i++) {
-      buyers.push({ id: randomUUID(), email: `${TEST_PREFIX}buyer${i}@dropdeck.test` })
+      buyers.push({
+        id: randomUUID(),
+        email: `${TEST_PREFIX}buyer_${i}@test.com`,
+      })
     }
+
+    // Batch insert buyers
     for (const b of buyers) {
+      const pwHash = await bcrypt.hash('test', 10)
       await query(
-        `INSERT INTO users (id,email,password_hash,role,name)
-         VALUES ($1,$2,$3,'buyer',$4) ON CONFLICT (id) DO NOTHING`,
-        [b.id, b.email, pwHash, `Load Buyer ${b.email}`],
+        `INSERT INTO users (id, email, password_hash, name, role) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (email) DO NOTHING`,
+        [b.id, b.email, pwHash, `Load Buyer ${b.email}`, 'buyer'],
       )
     }
-    log.push(`${CONCURRENCY} buyer accounts created`)
+    log.push(`✓ ${CONCURRENCY} buyers created`)
 
-    // 4. Fire all checkout requests concurrently
-    const t0      = Date.now()
-    const results = await Promise.all(buyers.map((b) => checkoutRequest(dropId, b.id)))
-    const elapsed = Date.now() - t0
+    // 3. Fire 150 concurrent checkout requests
+    log.push(`[TEST] Firing ${CONCURRENCY} concurrent checkout requests...`)
+    const start = Date.now()
+    const results = await Promise.all(buyers.map(b => checkoutRequest(dropId, b.id)))
+    const totalTime = Date.now() - start
+    log.push(`✓ All ${CONCURRENCY} requests completed in ${totalTime}ms`)
 
-    // 5. Analyse
-    const succeeded     = results.filter((r) => r.success)
-    const soldOut       = results.filter((r) => !r.success && r.errorCode === 'sold_out')
-    const limitExceeded = results.filter((r) => !r.success && r.errorCode === 'limit_exceeded')
-    const otherErrors   = results.filter((r) => !r.success && r.errorCode !== 'sold_out' && r.errorCode !== 'limit_exceeded')
-    const latencies     = results.map((r) => r.latency)
-    const avgLatency    = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+    // 4. Analyze results
+    const successes = results.filter(r => r.success)
+    const failures = results.filter(r => !r.success)
 
-    // 6. Cross-check with DB
-    const dbCheck = await query(
-      `SELECT COUNT(*) AS cnt FROM orders
-       WHERE drop_id = $1 AND status IN ('reserved','paid','confirmed')`,
-      [dropId],
-    )
-    const dbOrderCount = parseInt((dbCheck.rows[0] as { cnt: string }).cnt, 10)
-    const pass = dbOrderCount <= TOTAL_STOCK
+    // Query actual orders in DB
+    const orderResult = await query(`SELECT COUNT(*) as count FROM orders WHERE drop_id = $1`, [dropId])
+    const actualOrders = parseInt(orderResult.rows[0]?.count ?? '0')
+
+    const errorCounts: { [key: string]: number } = {}
+    failures.forEach(r => {
+      errorCounts[r.errorCode ?? 'unknown'] = (errorCounts[r.errorCode ?? 'unknown'] ?? 0) + 1
+    })
+
+    const isZeroOversell = actualOrders <= TOTAL_STOCK
+    const oversellBy = Math.max(0, actualOrders - TOTAL_STOCK)
+
+    log.push(`\n[RESULTS]`)
+    log.push(`✓ Zero-Oversell Guarantee: ${isZeroOversell ? 'PASSED' : 'FAILED'}`)
+    log.push(`  Concurrent requests: ${CONCURRENCY}`)
+    log.push(`  Successful checkouts: ${successes.length}`)
+    log.push(`  DB orders created: ${actualOrders}`)
+    log.push(`  Oversell by: ${oversellBy}`)
+    log.push(`\n[REJECTION BREAKDOWN]`)
+    Object.entries(errorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([code, count]) => log.push(`  ${code}: ${count}`))
+
+    log.push(`\n[LATENCY]`)
+    const latencies = results.map(r => r.latency)
+    const avgLatency = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+    log.push(`  Avg: ${avgLatency}ms`)
+    log.push(`  Min: ${Math.min(...latencies)}ms`)
+    log.push(`  Max: ${Math.max(...latencies)}ms`)
+    log.push(`  Wall clock: ${totalTime}ms`)
+
+    log.push(`\n[NOTE] To clean up test data, call POST /api/load-test/cleanup`)
 
     return NextResponse.json({
-      pass,
-      summary: {
-        totalRequests: CONCURRENCY,
-        apiSuccesses: succeeded.length,
-        dbOrdersCreated: dbOrderCount,
-        soldOutRejects: soldOut.length,
-        limitExceededRejects: limitExceeded.length,
-        otherErrors: otherErrors.length,
-        errorCodes: [...new Set(otherErrors.map((r) => r.errorCode))],
-        avgLatencyMs: avgLatency,
-        minLatencyMs: Math.min(...latencies),
-        maxLatencyMs: Math.max(...latencies),
-        wallClockMs: elapsed,
-        oversellDetected: dbOrderCount > TOTAL_STOCK,
-        oversellBy: Math.max(0, dbOrderCount - TOTAL_STOCK),
+      success: isZeroOversell,
+      results: {
+        concurrentRequests: CONCURRENCY,
+        successfulCheckouts: successes.length,
+        dbOrders: actualOrders,
+        oversellBy,
+        errorCounts,
+        latency: { avg: avgLatency, min: Math.min(...latencies), max: Math.max(...latencies), wallClock: totalTime },
       },
-      log,
+      log: log.join('\n'),
     })
-  } finally {
-    // Clean up in FK-safe order:
-    // checkout_log + orders reference drops(id) and users(id)
-    // so drop those rows first, then drops, then users
-    const steps = [
-      [`DELETE FROM checkout_log WHERE drop_id = $1`, [dropId]],
-      [`DELETE FROM orders       WHERE drop_id = $1`, [dropId]],
-      [`DELETE FROM drops        WHERE id      = $1`, [dropId]],
-      [`DELETE FROM users        WHERE email LIKE $1`, [`${TEST_PREFIX}%`]],
-    ] as const
-    for (const [sql, params] of steps) {
-      try {
-        await query(sql, [...params])
-      } catch {
-        // log silently — each step is independent
-      }
-    }
+  } catch (error) {
+    return NextResponse.json({ error: String(error), log: log.join('\n') }, { status: 500 })
   }
 }
