@@ -119,24 +119,7 @@ export async function POST(req: NextRequest) {
     log.push(`  Max: ${Math.max(...latencies)}ms`)
     log.push(`  Wall clock: ${totalTime}ms`)
 
-    // Clean up in FK-safe order:
-    // checkout_log + orders reference drops(id) and users(id)
-    // so drop those rows first, then drops, then users
-    const steps = [
-      [`DELETE FROM checkout_log WHERE drop_id = $1`, [dropId]],
-      [`DELETE FROM orders       WHERE drop_id = $1`, [dropId]],
-      [`DELETE FROM drops        WHERE id      = $1`, [dropId]],
-      [`DELETE FROM users        WHERE email LIKE $1`, [`${TEST_PREFIX}%`]],
-    ] as const
-    log.push(`\n[CLEANUP]`)
-    for (const [sql, params] of steps) {
-      try {
-        await query(sql, [...params])
-      } catch {
-        // log silently — each step is independent
-      }
-    }
-    log.push(`✓ Test data cleaned up`)
+    log.push(`\n[NOTE] To clean up test data, call POST /api/load-test/cleanup`)
 
     return NextResponse.json({
       success: isZeroOversell,
