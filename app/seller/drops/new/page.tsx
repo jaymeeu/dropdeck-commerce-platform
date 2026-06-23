@@ -56,8 +56,7 @@ export default function CreateDropPage() {
         return
       }
 
-      const drop = await createDrop({
-        sellerId: user?.id,
+      const drop = await createDrop(user?.id, {
         title: formData.title,
         description: formData.description,
         price: Math.round(parseFloat(formData.price) * 100),
