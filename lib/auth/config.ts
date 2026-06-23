@@ -4,6 +4,8 @@ import { authenticateUser } from '../actions/users'
 import './types'
 
 export const authConfig = {
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  trustHost: true,
   providers: [
     Credentials({
       name: 'Email & Password',
