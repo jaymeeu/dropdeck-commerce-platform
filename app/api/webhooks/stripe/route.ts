@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
   if (!webhookSecret) {
-    console.error('[v0] STRIPE_WEBHOOK_SECRET not set')
     return NextResponse.json(
       { error: 'Webhook secret not configured' },
       { status: 500 },
@@ -41,8 +40,6 @@ export async function POST(request: NextRequest) {
     // Construct and verify event
     const event = constructWebhookEvent(body, signature, webhookSecret)
 
-    console.log(`[v0] Received Stripe webhook event: ${event.type}`)
-
     // Handle payment intent succeeded
     if (event.type === 'payment_intent.succeeded') {
       const paymentIntent = event.data.object as any
@@ -56,11 +53,7 @@ export async function POST(request: NextRequest) {
           await updateOrderStatus(orderId, 'paid')
           await updateOrderStatus(orderId, 'confirmed')
 
-          console.log(`[v0] Order ${orderId} confirmed after payment`)
-
           // TODO: Send confirmation email here
-        } else {
-          console.warn(`[v0] Order ${orderId} not found for payment intent ${paymentIntent.id}`)
         }
       }
     }
@@ -76,8 +69,6 @@ export async function POST(request: NextRequest) {
         if (order) {
           // Mark as expired so reservation is released
           await updateOrderStatus(orderId, 'expired')
-
-          console.log(`[v0] Order ${orderId} marked as expired after payment failure`)
         }
       }
     }
@@ -94,14 +85,13 @@ export async function POST(request: NextRequest) {
 
         if (orderId) {
           await updateOrderStatus(orderId, 'refunded')
-          console.log(`[v0] Order ${orderId} marked as refunded`)
         }
       }
     }
 
     return NextResponse.json({ received: true }, { status: 200 })
   } catch (error) {
-    console.error('[v0] Webhook error:', error)
+
 
     const message = error instanceof Error ? error.message : 'Unknown error'
 

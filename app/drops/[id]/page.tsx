@@ -71,12 +71,12 @@ export default function DropDetailPage() {
     setError('')
     setIsCheckingOut(true)
     try {
-      const result = await attemptCheckout({ dropId: id, buyerId: user.id, quantity })
+      const result = await attemptCheckout(id, user.id, quantity)
       if (result.success) {
         setSuccess('Order reserved! Redirecting to payment...')
         setTimeout(() => router.push('/orders'), 2000)
       } else {
-        setError(result.message || 'Checkout failed')
+        setError(result.error || 'Checkout failed')
       }
     } catch (e: any) {
       setError(e.message || 'An error occurred')

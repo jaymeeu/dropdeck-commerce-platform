@@ -40,7 +40,6 @@ export async function POST(request: NextRequest) {
       status: result.success ? 201 : 400,
     })
   } catch (error) {
-    console.error('[v0] Checkout API error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 },

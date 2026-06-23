@@ -75,8 +75,6 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     )
   } catch (error) {
-    console.error('[v0] Payment intent error:', error)
-
     if (error instanceof Error && error.message.includes('Authentication required')) {
       return NextResponse.json(
         { error: 'Authentication required' },
