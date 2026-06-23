@@ -1,11 +1,26 @@
 -- DropDeck Schema Setup
 -- Aurora PostgreSQL with Drizzle ORM integration
 
--- Create ENUM types
-CREATE TYPE user_role AS ENUM ('buyer', 'seller', 'admin');
-CREATE TYPE drop_status AS ENUM ('draft', 'scheduled', 'live', 'sold_out', 'ended');
-CREATE TYPE order_status AS ENUM ('reserved', 'paid', 'confirmed', 'expired', 'refunded');
-CREATE TYPE checkout_outcome AS ENUM ('success', 'sold_out', 'limit_exceeded', 'not_live', 'error');
+-- Create ENUM types (IF NOT EXISTS - idempotent)
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('buyer', 'seller', 'admin');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE drop_status AS ENUM ('draft', 'scheduled', 'live', 'sold_out', 'ended');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE order_status AS ENUM ('reserved', 'paid', 'confirmed', 'expired', 'refunded');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE checkout_outcome AS ENUM ('success', 'sold_out', 'limit_exceeded', 'not_live', 'error');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Users table (buyers, sellers, admins)
 CREATE TABLE IF NOT EXISTS users (
@@ -101,6 +116,3 @@ ALTER TABLE orders ADD CONSTRAINT ck_orders_total_amount_non_negative CHECK (tot
 ALTER TABLE drops ADD CONSTRAINT ck_drops_total_stock_positive CHECK (total_stock > 0);
 ALTER TABLE drops ADD CONSTRAINT ck_drops_price_non_negative CHECK (price >= 0);
 ALTER TABLE drops ADD CONSTRAINT ck_drops_max_per_buyer_positive CHECK (max_per_buyer > 0);
-
--- Vacuum and analyze to update statistics
-VACUUM ANALYZE;
