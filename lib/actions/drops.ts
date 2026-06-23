@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { query } from '../db'
 import type { Drop, DropWithSeller } from '../types'
 
@@ -40,6 +41,20 @@ export async function getDropsByStatus(status: string, limit = 20): Promise<Drop
  * Get live drops sorted by stock urgency
  */
 export async function getLiveDrops(limit = 20): Promise<DropWithSeller[]> {
+  // Also auto-update stale 'scheduled' rows that have now started
+  await query(
+    `UPDATE drops SET status = 'live', updated_at = NOW()
+     WHERE status = 'scheduled' AND start_time <= NOW()
+       AND (end_time IS NULL OR end_time > NOW())`,
+    [],
+  )
+  // Auto-end drops whose end_time has passed
+  await query(
+    `UPDATE drops SET status = 'ended', updated_at = NOW()
+     WHERE status = 'live' AND end_time IS NOT NULL AND end_time <= NOW()`,
+    [],
+  )
+
   const result = await query(
     `SELECT d.id, d.seller_id, d.title, d.description, d.image_urls, d.price, d.total_stock,
             d.start_time, d.end_time, d.status, d.max_per_buyer, d.created_at, d.updated_at,
@@ -79,7 +94,7 @@ export async function getScheduledDrops(limit = 20): Promise<DropWithSeller[]> {
      FROM drops d
      JOIN users u ON d.seller_id = u.id
      LEFT JOIN seller_profiles sp ON u.id = sp.user_id
-     WHERE d.status = 'scheduled'
+     WHERE d.status = 'scheduled' AND d.start_time > NOW()
      ORDER BY d.start_time ASC
      LIMIT $1`,
     [limit],
@@ -169,7 +184,13 @@ export async function createDrop(
     ],
   )
 
-  return mapDropRow(result.rows[0])
+  const drop = mapDropRow(result.rows[0])
+
+  // Revalidate the storefront so the new drop appears immediately
+  revalidatePath('/')
+  revalidatePath('/seller/dashboard')
+
+  return drop
 }
 
 /**

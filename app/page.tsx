@@ -5,6 +5,9 @@ import { DropCard } from '@/components/drops/drop-card'
 import { Nav } from '@/components/layout/nav'
 import { Button } from '@/components/ui/button'
 
+// Revalidate every 60 seconds so status transitions appear without a full redeploy
+export const revalidate = 60
+
 export const metadata: Metadata = {
   title: 'DropDeck - Buy Limited Releases',
   description: 'Discover and buy the hottest flash drops',
