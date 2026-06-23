@@ -2,12 +2,29 @@
 
 import { revalidatePath } from 'next/cache'
 import { query } from '../db'
+import { syncDropLifecycle, ACTIVE_ORDER_STOCK_WHERE, getActiveUnitsSold } from '../drop-lifecycle'
+import { requireRole } from '../auth/guards'
 import type { Drop, DropWithSeller } from '../types'
 
+export interface DropFormData {
+  title: string
+  description?: string
+  imageUrls?: string[]
+  price: number
+  totalStock: number
+  startTime?: Date
+  endTime?: Date
+  maxPerBuyer?: number
+}
+
+const DRAFT_PLACEHOLDER_START = () => new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+
 /**
- * Get a drop by ID
+ * Get a drop by ID (syncs lifecycle so status/stock are current)
  */
 export async function getDrop(dropId: string): Promise<Drop | null> {
+  await syncDropLifecycle(dropId)
+
   const result = await query(
     `SELECT id, seller_id, title, description, image_urls, price, total_stock,
             start_time, end_time, status, max_per_buyer, created_at, updated_at
@@ -41,40 +58,28 @@ export async function getDropsByStatus(status: string, limit = 20): Promise<Drop
  * Get live drops sorted by stock urgency
  */
 export async function getLiveDrops(limit = 20): Promise<DropWithSeller[]> {
-  // Also auto-update stale 'scheduled' rows that have now started
-  await query(
-    `UPDATE drops SET status = 'live', updated_at = NOW()
-     WHERE status = 'scheduled' AND start_time <= NOW()
-       AND (end_time IS NULL OR end_time > NOW())`,
-    [],
-  )
-  // Auto-end drops whose end_time has passed
-  await query(
-    `UPDATE drops SET status = 'ended', updated_at = NOW()
-     WHERE status = 'live' AND end_time IS NOT NULL AND end_time <= NOW()`,
-    [],
-  )
+  await syncDropLifecycle()
 
   const result = await query(
     `SELECT d.id, d.seller_id, d.title, d.description, d.image_urls, d.price, d.total_stock,
             d.start_time, d.end_time, d.status, d.max_per_buyer, d.created_at, d.updated_at,
-            u.name, sp.store_name, sp.store_slug
+            u.name, sp.store_name, sp.store_slug,
+            d.total_stock - COALESCE((
+              SELECT SUM(quantity) FROM orders o
+              WHERE o.drop_id = d.id AND (${ACTIVE_ORDER_STOCK_WHERE})
+            ), 0) AS available_stock
      FROM drops d
      JOIN users u ON d.seller_id = u.id
      LEFT JOIN seller_profiles sp ON u.id = sp.user_id
      WHERE d.status = 'live'
-     ORDER BY (
-       d.total_stock - COALESCE((
-         SELECT SUM(quantity) FROM orders
-         WHERE drop_id = d.id AND status IN ('reserved', 'paid', 'confirmed')
-       ), 0)
-     ) ASC
+     ORDER BY available_stock ASC
      LIMIT $1`,
     [limit],
   )
 
   return result.rows.map((row) => ({
     ...mapDropRow(row),
+    availableStock: Number(row.available_stock),
     seller: {
       name: row.name,
       storeName: row.store_name,
@@ -87,6 +92,8 @@ export async function getLiveDrops(limit = 20): Promise<DropWithSeller[]> {
  * Get scheduled drops sorted by start time
  */
 export async function getScheduledDrops(limit = 20): Promise<DropWithSeller[]> {
+  await syncDropLifecycle()
+
   const result = await query(
     `SELECT d.id, d.seller_id, d.title, d.description, d.image_urls, d.price, d.total_stock,
             d.start_time, d.end_time, d.status, d.max_per_buyer, d.created_at, d.updated_at,
@@ -130,6 +137,8 @@ export async function getSellerDrops(sellerId: string): Promise<Drop[]> {
  * Get available stock for a drop (accounting for active orders)
  */
 export async function getAvailableStock(dropId: string): Promise<number> {
+  await syncDropLifecycle(dropId)
+
   const dropResult = await query(
     `SELECT total_stock FROM drops WHERE id = $1`,
     [dropId],
@@ -138,38 +147,101 @@ export async function getAvailableStock(dropId: string): Promise<number> {
   if (dropResult.rows.length === 0) return 0
 
   const totalStock = dropResult.rows[0].total_stock
-
-  const soldResult = await query(
-    `SELECT COALESCE(SUM(quantity), 0) as total
-     FROM orders
-     WHERE drop_id = $1 AND status IN ('reserved', 'paid', 'confirmed')`,
-    [dropId],
-  )
-
-  const sold = Number(soldResult.rows[0].total)
+  const sold = await getActiveUnitsSold(dropId)
   return Math.max(0, totalStock - sold)
 }
 
 /**
- * Create a new drop (seller action)
+ * Create a drop as the authenticated seller.
+ */
+export async function createDropAuthenticated(
+  data: DropFormData,
+  options: { asDraft?: boolean } = {},
+): Promise<Drop> {
+  const user = await requireRole('seller')
+  return createDrop(user.id!, data, options)
+}
+
+/**
+ * Publish a draft drop (seller must own it).
+ */
+export async function publishDropAuthenticated(dropId: string): Promise<Drop> {
+  const user = await requireRole('seller')
+
+  const drop = await getDrop(dropId)
+  if (!drop || drop.sellerId !== user.id) {
+    throw new Error('Drop not found or unauthorized')
+  }
+  if (drop.status !== 'draft') {
+    throw new Error('Only draft drops can be published')
+  }
+
+  const placeholderCutoff = new Date(Date.now() + 300 * 24 * 60 * 60 * 1000)
+  if (drop.startTime > placeholderCutoff) {
+    throw new Error('Set a start date before publishing')
+  }
+
+  const result = await query(
+    `UPDATE drops SET status = 'scheduled', updated_at = NOW()
+     WHERE id = $1 AND seller_id = $2 AND status = 'draft'
+     RETURNING id, seller_id, title, description, image_urls, price, total_stock, start_time, end_time, status, max_per_buyer, created_at, updated_at`,
+    [dropId, user.id],
+  )
+
+  if (result.rows.length === 0) {
+    throw new Error('Failed to publish drop')
+  }
+
+  revalidatePath('/')
+  revalidatePath('/seller/dashboard')
+
+  return mapDropRow(result.rows[0])
+}
+
+/**
+ * Update schedule on a draft drop before publishing.
+ */
+export async function scheduleDraftAuthenticated(
+  dropId: string,
+  startTime: Date,
+  endTime?: Date,
+): Promise<Drop> {
+  const user = await requireRole('seller')
+
+  if (endTime && endTime <= startTime) {
+    throw new Error('End time must be after start time')
+  }
+
+  const result = await query(
+    `UPDATE drops
+     SET start_time = $3, end_time = $4, updated_at = NOW()
+     WHERE id = $1 AND seller_id = $2 AND status = 'draft'
+     RETURNING id, seller_id, title, description, image_urls, price, total_stock, start_time, end_time, status, max_per_buyer, created_at, updated_at`,
+    [dropId, user.id, startTime, endTime || null],
+  )
+
+  if (result.rows.length === 0) {
+    throw new Error('Draft not found or unauthorized')
+  }
+
+  return mapDropRow(result.rows[0])
+}
+
+/**
+ * Create a new drop (internal — use createDropAuthenticated from UI)
  */
 export async function createDrop(
   sellerId: string,
-  data: {
-    title: string
-    description?: string
-    imageUrls?: string[]
-    price: number
-    totalStock: number
-    startTime: Date
-    endTime?: Date
-    maxPerBuyer?: number
-  },
+  data: DropFormData,
+  options: { asDraft?: boolean } = {},
 ): Promise<Drop> {
+  const status = options.asDraft ? 'draft' : 'scheduled'
+  const startTime = data.startTime ?? DRAFT_PLACEHOLDER_START()
+
   const result = await query(
     `INSERT INTO drops
      (seller_id, title, description, image_urls, price, total_stock, start_time, end_time, status, max_per_buyer)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'scheduled', $9)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id, seller_id, title, description, image_urls, price, total_stock, start_time, end_time, status, max_per_buyer, created_at, updated_at`,
     [
       sellerId,
@@ -178,15 +250,15 @@ export async function createDrop(
       data.imageUrls || [],
       data.price,
       data.totalStock,
-      data.startTime,
+      startTime,
       data.endTime || null,
+      status,
       data.maxPerBuyer || 1,
     ],
   )
 
   const drop = mapDropRow(result.rows[0])
 
-  // Revalidate the storefront so the new drop appears immediately
   revalidatePath('/')
   revalidatePath('/seller/dashboard')
 

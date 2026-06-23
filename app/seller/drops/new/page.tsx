@@ -2,14 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSession } from 'next-auth/react'
-import { createDrop } from '@/lib/actions/drops'
+import { createDropAuthenticated } from '@/lib/actions/drops'
 import { Button } from '@/components/ui/button'
 import { Nav } from '@/components/layout/nav'
 
 export default function CreateDropPage() {
   const router = useRouter()
-  const { data: session } = useSession()
   const [step, setStep] = useState(1)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -26,8 +24,6 @@ export default function CreateDropPage() {
     endTime: '22:00',
   })
 
-  const user = session?.user as any
-
   const handle = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData((p) => ({ ...p, [e.target.name]: e.target.value }))
   }
@@ -38,38 +34,46 @@ export default function CreateDropPage() {
     setFormData((p) => ({ ...p, imageUrls: urls }))
   }
 
-  const handleSubmit = async () => {
+  const buildDropPayload = () => ({
+    title: formData.title,
+    description: formData.description,
+    price: Math.round(parseFloat(formData.price) * 100),
+    imageUrls: formData.imageUrls.filter(Boolean),
+    totalStock: parseInt(formData.totalStock),
+    maxPerBuyer: parseInt(formData.maxPerBuyer),
+    startTime: formData.startDate
+      ? new Date(`${formData.startDate}T${formData.startTime}`)
+      : undefined,
+    endTime: formData.endDate
+      ? new Date(`${formData.endDate}T${formData.endTime}`)
+      : undefined,
+  })
+
+  const handleSubmit = async (asDraft: boolean) => {
     setError('')
     setIsLoading(true)
     try {
-      const startTime = new Date(`${formData.startDate}T${formData.startTime}`)
-      const endTime = new Date(`${formData.endDate}T${formData.endTime}`)
+      if (!asDraft) {
+        const startTime = new Date(`${formData.startDate}T${formData.startTime}`)
+        const endTime = new Date(`${formData.endDate}T${formData.endTime}`)
 
-      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-        setError('Please enter valid start and end dates.')
-        setIsLoading(false)
-        return
-      }
-      if (endTime <= startTime) {
-        setError('End time must be after start time.')
-        setIsLoading(false)
-        return
+        if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+          setError('Please enter valid start and end dates.')
+          setIsLoading(false)
+          return
+        }
+        if (endTime <= startTime) {
+          setError('End time must be after start time.')
+          setIsLoading(false)
+          return
+        }
       }
 
-      const drop = await createDrop(user?.id, {
-        title: formData.title,
-        description: formData.description,
-        price: Math.round(parseFloat(formData.price) * 100),
-        imageUrls: formData.imageUrls.filter(Boolean),
-        totalStock: parseInt(formData.totalStock),
-        maxPerBuyer: parseInt(formData.maxPerBuyer),
-        startTime,
-        endTime,
-      })
+      await createDropAuthenticated(buildDropPayload(), { asDraft })
 
       router.push('/seller/dashboard')
-    } catch (err: any) {
-      setError(err.message || 'Failed to create drop')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create drop')
     } finally {
       setIsLoading(false)
     }
@@ -248,11 +252,19 @@ export default function CreateDropPage() {
                     Back
                   </Button>
                   <Button
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit(true)}
+                    disabled={isLoading}
+                    variant="outline"
+                    className="flex-1 border-white/20"
+                  >
+                    {isLoading ? 'Saving...' : 'Save as Draft'}
+                  </Button>
+                  <Button
+                    onClick={() => handleSubmit(false)}
                     disabled={isLoading}
                     className="flex-1 bg-[#6366f1] hover:bg-[#6366f1]/90 text-white font-semibold"
                   >
-                    {isLoading ? 'Creating...' : 'Launch Drop'}
+                    {isLoading ? 'Scheduling...' : 'Schedule Drop'}
                   </Button>
                 </div>
               </div>

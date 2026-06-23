@@ -79,7 +79,7 @@ export default async function StorefrontPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {liveDrops.map((drop) => (
-                  <DropCard key={drop.id} drop={drop} />
+                  <DropCard key={drop.id} drop={drop} availableStock={drop.availableStock} />
                 ))}
               </div>
             </>

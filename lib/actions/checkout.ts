@@ -3,6 +3,9 @@
 import { query, withTransaction } from '../db'
 import { CheckoutError, type CheckoutResponse, type Order } from '../types'
 import { env } from '../env'
+import { requireAuth } from '../auth/guards'
+import { stripe } from '../stripe'
+import { syncDropLifecycle, ACTIVE_ORDER_STOCK_WHERE } from '../drop-lifecycle'
 
 /**
  * Core checkout logic with atomic database transaction
@@ -16,6 +19,17 @@ import { env } from '../env'
  * @param quantity - Number of units to purchase
  * @returns CheckoutResponse with order details or error
  */
+/**
+ * Checkout for the currently authenticated user.
+ */
+export async function attemptCheckoutAuthenticated(
+  dropId: string,
+  quantity: number,
+): Promise<CheckoutResponse> {
+  const user = await requireAuth()
+  return attemptCheckout(dropId, user.id!, quantity)
+}
+
 export async function attemptCheckout(
   dropId: string,
   buyerId: string,
@@ -32,6 +46,8 @@ export async function attemptCheckout(
     if (quantity <= 0 || quantity > env.MAX_UNITS_PER_BUYER) {
       throw new CheckoutError('limit_exceeded', `Quantity must be between 1 and ${env.MAX_UNITS_PER_BUYER}`)
     }
+
+    await syncDropLifecycle(dropId)
 
     const order = await withTransaction(async (client) => {
       // 1. LOCK the drop row for update - this is the key serialization point
@@ -60,7 +76,7 @@ export async function attemptCheckout(
         `SELECT COALESCE(SUM(quantity), 0) as total
          FROM orders
          WHERE drop_id = $1
-           AND status IN ('reserved', 'paid', 'confirmed')`,
+           AND (${ACTIVE_ORDER_STOCK_WHERE})`,
         [dropId],
       )
 
@@ -77,7 +93,7 @@ export async function attemptCheckout(
          FROM orders
          WHERE drop_id = $1
            AND buyer_id = $2
-           AND status IN ('reserved', 'paid', 'confirmed')`,
+           AND (${ACTIVE_ORDER_STOCK_WHERE})`,
         [dropId, buyerId],
       )
 
@@ -211,4 +227,80 @@ export async function updateOrderStatus(
      WHERE id = $3`,
     [newStatus, paidAt, orderId],
   )
+}
+
+export async function setOrderPaymentIntent(
+  orderId: string,
+  paymentIntentId: string,
+): Promise<void> {
+  await query(
+    `UPDATE orders SET stripe_payment_intent_id = $1 WHERE id = $2`,
+    [paymentIntentId, orderId],
+  )
+}
+
+/**
+ * Verify a succeeded Stripe payment and mark the order confirmed.
+ * Used after client-side payment and as a webhook fallback.
+ */
+export async function confirmOrderPayment(
+  orderId: string,
+  paymentIntentId: string,
+): Promise<void> {
+  const user = await requireAuth()
+  const order = await getOrder(orderId)
+
+  if (!order || order.buyerId !== user.id) {
+    throw new Error('Unauthorized')
+  }
+
+  if (order.status !== 'reserved') {
+    return
+  }
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+
+  if (paymentIntent.metadata.orderId !== orderId) {
+    throw new Error('Payment does not match this order')
+  }
+
+  if (paymentIntent.status !== 'succeeded') {
+    throw new Error(`Payment not completed: ${paymentIntent.status}`)
+  }
+
+  await setOrderPaymentIntent(orderId, paymentIntentId)
+  await updateOrderStatus(orderId, 'paid')
+  await updateOrderStatus(orderId, 'confirmed')
+}
+
+/**
+ * Simulated payment for demo/dev when Stripe is unavailable.
+ */
+export async function simulateOrderPayment(orderId: string): Promise<void> {
+  const simulateEnabled =
+    process.env.SIMULATE_PAYMENTS === 'true' ||
+    (process.env.NODE_ENV === 'development' && !process.env.STRIPE_SECRET_KEY)
+
+  if (!simulateEnabled) {
+    throw new Error('Simulated payments are not enabled')
+  }
+
+  const user = await requireAuth()
+  const order = await getOrder(orderId)
+
+  if (!order || order.buyerId !== user.id) {
+    throw new Error('Unauthorized')
+  }
+
+  if (order.status !== 'reserved') {
+    throw new Error('Order is not awaiting payment')
+  }
+
+  if (new Date(order.expiresAt) <= new Date()) {
+    throw new Error('Reservation has expired')
+  }
+
+  await setOrderPaymentIntent(orderId, `sim_${orderId}`)
+  await updateOrderStatus(orderId, 'paid')
+  await updateOrderStatus(orderId, 'confirmed')
 }
