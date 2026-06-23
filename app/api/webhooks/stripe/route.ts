@@ -10,26 +10,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { Readable } from 'stream'
 import { stripe, constructWebhookEvent } from '@/lib/stripe'
 import { updateOrderStatus, getOrder } from '@/lib/actions/checkout'
-
-// Disable body parsing for webhook (we need raw body)
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-}
-
-async function getRawBody(readable: Readable): Promise<Buffer> {
-  const chunks: Uint8Array[] = []
-
-  for await (const chunk of readable) {
-    chunks.push(chunk)
-  }
-
-  return Buffer.concat(chunks)
-}
 
 export async function POST(request: NextRequest) {
   const signature = request.headers.get('stripe-signature')
