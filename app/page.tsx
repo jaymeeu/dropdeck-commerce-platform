@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth/auth'
 import { getLiveDrops, getScheduledDrops, getDropsByStatus } from '@/lib/actions/drops'
 import { DropCard } from '@/components/drops/drop-card'
 import { Button } from '@/components/ui/button'
+import { SignOutButton } from '@/components/auth/sign-out-button'
 
 export const metadata: Metadata = {
   title: 'DropDeck - Buy Limited Releases',
@@ -53,17 +54,7 @@ export default async function StorefrontPage() {
                 <Link href="/orders">
                   <Button variant="outline">My Orders</Button>
                 </Link>
-                <Link href="/api/auth/signout" onClick={(e) => {
-                  e.preventDefault()
-                  // Use form submission for signout
-                  const form = document.createElement('form')
-                  form.method = 'post'
-                  form.action = '/api/auth/signout'
-                  document.body.appendChild(form)
-                  form.submit()
-                }}>
-                  <Button variant="outline">Sign Out</Button>
-                </Link>
+                <SignOutButton />
               </>
             ) : (
               <>
