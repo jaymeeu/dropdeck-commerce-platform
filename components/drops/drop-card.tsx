@@ -72,9 +72,11 @@ export function DropCard({ drop, availableStock }: DropCardProps) {
           <div className="flex items-end justify-between">
             <div className="text-3xl font-black text-primary">${price.toFixed(2)}</div>
             {isScheduled && drop.startTime && (
-              <div className="text-xs text-muted-foreground text-right">
-                <div>{drop.startTime.toLocaleDateString()}</div>
-                <div className="font-semibold">{drop.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              <div className="text-xs text-muted-foreground text-right" suppressHydrationWarning>
+                <div suppressHydrationWarning>{drop.startTime.toLocaleDateString()}</div>
+                <div className="font-semibold" suppressHydrationWarning>
+                  {drop.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
               </div>
             )}
           </div>
