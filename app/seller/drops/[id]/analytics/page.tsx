@@ -140,7 +140,7 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
                           {o.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground text-sm">
+                      <td className="px-6 py-4 text-muted-foreground text-sm" suppressHydrationWarning>
                         {new Date(o.reserved_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                       </td>
                     </tr>

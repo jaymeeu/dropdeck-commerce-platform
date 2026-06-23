@@ -18,8 +18,7 @@ export async function GET(request: NextRequest) {
     // Verify this is a cron request from Vercel
     const authHeader = request.headers.get('authorization')
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      console.warn('[v0] Unauthorized cron request')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const now = new Date()
@@ -34,9 +33,6 @@ export async function GET(request: NextRequest) {
     )
 
     const scheduledCount = scheduledResult.rowCount || 0
-    if (scheduledCount > 0) {
-      console.log(`[v0] Transitioned ${scheduledCount} drops from scheduled to live`)
-    }
 
     // 2. Transition live → ended
     const endedResult = await query(
@@ -49,9 +45,6 @@ export async function GET(request: NextRequest) {
     )
 
     const endedCount = endedResult.rowCount || 0
-    if (endedCount > 0) {
-      console.log(`[v0] Transitioned ${endedCount} drops from live to ended`)
-    }
 
     // 3. Expire reserved orders
     const expiredResult = await query(
@@ -64,8 +57,6 @@ export async function GET(request: NextRequest) {
 
     const expiredCount = expiredResult.rowCount || 0
     if (expiredCount > 0) {
-      console.log(`[v0] Expired ${expiredCount} reserved orders`)
-
       // For each expired order, check if we should un-mark the drop as sold_out
       const expiredOrders = expiredResult.rows
       for (const order of expiredOrders) {
@@ -110,7 +101,6 @@ export async function GET(request: NextRequest) {
       { status: 200 },
     )
   } catch (error) {
-    console.error('[v0] Cron job error:', error)
     return NextResponse.json(
       { error: 'Cron job failed', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 },

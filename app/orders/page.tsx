@@ -52,7 +52,7 @@ export default async function OrdersPage() {
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-lg text-foreground truncate">{order.drop_title}</h3>
                     <p className="text-sm text-muted-foreground">by {order.seller_name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-muted-foreground mt-1" suppressHydrationWarning>
                       {new Date(order.reserved_at).toLocaleDateString()} at {new Date(order.reserved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>

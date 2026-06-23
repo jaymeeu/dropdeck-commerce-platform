@@ -76,7 +76,7 @@ export default function DropDetailPage() {
         setSuccess('Order reserved! Redirecting to payment...')
         setTimeout(() => router.push('/orders'), 2000)
       } else {
-        setError(result.message || 'Checkout failed')
+        setError(result.error || 'Checkout failed')
       }
     } catch (e: any) {
       setError(e.message || 'An error occurred')
