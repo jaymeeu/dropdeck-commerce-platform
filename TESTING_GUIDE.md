@@ -4,7 +4,7 @@ Complete guide for testing all features of the DropDeck flash-drop commerce plat
 
 ## Prerequisites
 
-- Access to deployed Vercel instance OR local development environment (`pnpm dev`)
+- Access to deployed Vercel instance OR local development environment (`npm run dev`)
 - Test database with seed data (3 sample drops + 6 test users)
 - Stripe test mode credentials (for payment testing)
 - Browser with developer tools

@@ -56,7 +56,7 @@ This database-level row lock serializes all concurrent checkout attempts for the
 
 ### Prerequisites
 
-1. **Node.js 18+** and pnpm
+1. **Node.js 18+** and npm
 2. **Amazon Aurora PostgreSQL Serverless v2** provisioned
 3. **Vercel project** with Aurora integration configured
 4. **Stripe account** for payments
@@ -93,7 +93,7 @@ MAX_UNITS_PER_BUYER=5
 
 ```bash
 # Install dependencies
-pnpm install
+npm install
 
 # Apply database schema
 npx tsx scripts/migrate.ts
@@ -102,7 +102,7 @@ npx tsx scripts/migrate.ts
 npx tsx scripts/migrate.ts  # This applies 002-seed-data.sql
 
 # Start dev server
-pnpm dev
+npm run dev
 ```
 
 Visit `http://localhost:3000` to see the storefront.
@@ -172,10 +172,10 @@ The load test fires 150 concurrent checkout requests against a single drop with 
 
 ```bash
 # Start dev server
-pnpm dev
+npm run dev
 
 # In another terminal:
-npx tsx scripts/load-test.ts
+npm run load-test
 ```
 
 **Expected Result**: Exactly 100 successful orders, 50 "sold_out" failures. This proves the zero-oversell guarantee.
