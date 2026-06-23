@@ -36,13 +36,13 @@ DropDeck is a production-grade flash sales platform built with **Next.js 16**, *
 ✓ **Webhook Handler** - Listen for payment_intent.succeeded/failed events
 ✓ **Order Status Flow** - reserved → paid → confirmed or expired
 
-### Automation (Complete)
-✓ **Cron Jobs** - `/api/drops/status` runs every minute to:
-  - Transition drops: scheduled → live, live → ended
-  - Expire old reservations: reserved → expired
-  - Auto-restore stock when reservations expire
-  - Transition sold-out drops back to live if stock opens up
-✓ **Reservation Expiry** - 5-minute timeout automatically frees stock
+### Automation (Complete - PostgreSQL Triggers, No Cron Fee)
+✓ **Database Triggers** - Zero-cost automation via PostgreSQL triggers:
+  - `check_and_update_drop_status()` - Transition drops: scheduled → live, live → ended
+  - `check_order_expiry()` - Mark orders as expired when `expires_at <= NOW()`
+  - `check_drop_stock_on_order_change()` - Auto-restore stock when orders expire/refund
+  - Transition sold-out drops back to live if stock becomes available
+✓ **Reservation Expiry** - 5-minute timeout automatically enforced via triggers (no external service)
 
 ### The Zero-Oversell Guarantee (Complete)
 ✓ **Atomic Transactions** - `BEGIN` → lock drop row → validate stock → create order → `COMMIT`
@@ -141,7 +141,6 @@ app/
   │   │   └── register/route.ts       # Signup endpoint
   │   ├── checkout/route.ts           # Checkout API
   │   ├── payments/intent/route.ts    # Stripe intent creation
-  │   ├── drops/status/route.ts       # Cron job handler
   │   └── webhooks/stripe/route.ts    # Stripe webhook
   └── layout.tsx                      # Root layout with SessionProvider
 

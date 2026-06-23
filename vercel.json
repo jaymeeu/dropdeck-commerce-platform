@@ -1,8 +1,5 @@
 {
-  "crons": [
-    {
-      "path": "/api/drops/status",
-      "schedule": "* * * * *"
-    }
-  ]
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "installCommand": "pnpm install"
 }
